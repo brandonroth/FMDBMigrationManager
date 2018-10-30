@@ -42,20 +42,32 @@ BOOL FMDBIsMigrationAtPath(NSString *path)
 
 static NSArray *FMDBClassesConformingToProtocol(Protocol *protocol)
 {
-    NSMutableArray *conformingClasses = [NSMutableArray new];
+    // Current sample code in developer docs https://developer.apple.com/documentation/objectivec/1418579-objc_getclasslist
+    // has an array out of bounds bug because the number of classes returned can change between invocations.
+    //
+    // The sample code from http://opensource.apple.com/source/objc4/objc4-208/runtime/objc-runtime.h  (line 116) takes
+    // this possible change into account and should work better.
+    //
+    int numClasses = 0, newNumClasses = objc_getClassList(NULL, 0);
     Class *classes = NULL;
-    int numClasses = objc_getClassList(NULL, 0);
-    if (numClasses > 0 ) {
-        classes = (Class *)malloc(sizeof(Class) * numClasses);
-        numClasses = objc_getClassList(classes, numClasses);
+    while (numClasses < newNumClasses) {
+        numClasses = newNumClasses;
+        classes = (Class *)realloc(classes, sizeof(Class) * numClasses);
+        newNumClasses = objc_getClassList(classes, numClasses);
+    }
+    
+    // now, can use the classes list; if NULL, there are no classes
+    NSMutableArray *conformingClasses = [NSMutableArray new];
+    if (numClasses > 0) {
         for (int index = 0; index < numClasses; index++) {
             Class nextClass = classes[index];
             if (class_conformsToProtocol(nextClass, protocol)) {
                 [conformingClasses addObject:nextClass];
             }
         }
-        free(classes);
     }
+    
+    free(classes);
     return conformingClasses;
 }
 
